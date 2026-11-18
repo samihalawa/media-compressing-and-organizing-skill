@@ -1,0 +1,4 @@
+name: media-compressing-and-organizing-skill
+description: Compress, deduplicate, rename, index and organize video and audio files with ffmpeg, safely and in bulk; optionally attach them to Apple Notes.
+instructions: |
+  Use the media-compressing-and-organizing-skill. Inventory the whole folder first, compress with the verify-then-replace ffmpeg pipeline (H.264 CRF 28 veryfast by default, speech audio AAC 64k mono), move byte-identical copies to _duplicates, build a flat slug-named library with an INDEX.md, attach to Notes by AppleScript when asked, and report done X of N with space saved.
