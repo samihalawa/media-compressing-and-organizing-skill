@@ -194,9 +194,17 @@ osascript -e 'on run argv' -e 'tell application "Notes"' -e 'set out to ""' -e '
   and shows each video once.
 - Deleted notes go to Recently Deleted (kept 30 days, still counted in iCloud
   storage until then).
-- Split large sets across numbered notes (about 20 videos each), oldest first,
-  run the loop in the background with a log, and stop if free disk space drops
-  below a safety floor (`df -g "$DIR" | tail -1 | awk '{print $4}'`).
+- Use as few notes as possible: Notes allows at most 250 attachments per note
+  (error "Maximum attachments reached", -10000), so fill notes "Videos 1",
+  "Videos 2", ... up to 250 each, oldest first. Notes cannot move attachments
+  between notes, so plan the split before attaching rather than merging later.
+- Pass about 20 files per `osascript` call (loop over `argv` inside one
+  AppleScript run, keeping the running expected count) to cut per-call
+  overhead; run it in the background with a log of expected vs actual counts,
+  and stop if free disk space drops below a safety floor
+  (`df -g "$DIR" | tail -1 | awk '{print $4}'`).
+- `set name of note` changes the list title only; the heading inside the note
+  keeps the original body text, so set the final title in `body` when creating.
 - On the same APFS volume the attach is near-instant and uses no extra local
   space (file clone), but an iCloud Notes account uploads every byte: check
   iCloud storage before attaching tens of gigabytes. Exclude temp, partial and
