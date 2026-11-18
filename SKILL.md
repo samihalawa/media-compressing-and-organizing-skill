@@ -114,6 +114,17 @@ awk 'seen[substr($0,1,64)]++ {print substr($0,67)}' | while IFS= read -r f; do m
 ls | sed -E 's/^[0-9a-f]{8,}-//' | sort | uniq -d
 ```
 
+- A re-encoded copy (for example a leftover in a compression work folder) has
+  different bytes but the same duration as its source: treat a duration match
+  within 1.5 s as a copy candidate.
+- Equal duration alone is not proof (sites often trim clips to the same
+  length). Confirm by comparing small frames at 20%, 50% and 80%:
+  `ffmpeg -v error -ss T -i f -frames:v 1 -vf scale=16:16,format=gray -f rawvideo -`;
+  a mean absolute byte difference under about 12 means the same video, while
+  different videos score 50 or more.
+- For the user's working set (a Notes folder, playlist or index), keep one
+  copy per video, the largest or best-named, without deleting files on disk.
+
 ## 5. Organize Into A Flat, Named Library
 
 Default layout for courses, lessons and audio collections:
@@ -150,21 +161,39 @@ known. When the folder grows later, append new rows instead of rebuilding.
 ## 6. Attach Media To Apple Notes (macOS, Optional)
 
 AppleScript can create notes and attach files directly; this is faster and
-more reliable than clicking through the Notes UI.
+more reliable than clicking through the Notes UI. Two Notes quirks must be
+handled, or every note looks duplicated:
+
+- `make new attachment` inserts the file twice. After each attach, delete the
+  extra copies until the attachment count equals the number of files added.
+- Setting both `name` and `body` prints the title twice. Set only
+  `body:"<h1>Title</h1>"`; Notes takes the title from the first line.
+
+Put the notes in their own folder, deduplicate the files first (step 4, plus
+same-title copies and compressed copies of the same video), and test on one
+file before the batch.
 
 ```bash
-# test one file first
+FOLDER="My videos"
 osascript -e 'on run argv' -e 'tell application "Notes"' \
-  -e 'set n to make new note with properties {name:(item 1 of argv), body:("<h1>" & (item 1 of argv) & "</h1>")}' \
-  -e 'tell n to make new attachment at end of attachments with data (POSIX file (item 2 of argv))' \
-  -e 'return id of n' -e 'end tell' -e 'end run' "My videos 01" "$DIR/first.mp4"
-# then: attach to an existing note by id
-osascript -e 'on run argv' -e 'tell application "Notes" to tell note id (item 1 of argv) to make new attachment at end of attachments with data (POSIX file (item 2 of argv))' -e 'end run' "$NOTE_ID" "$FILE"
-# verify per note (Notes reports 2 attachments per video: the file and its preview)
-osascript -e 'tell application "Notes"' -e 'set out to ""' -e 'repeat with n in (every note whose name starts with "My videos")' \
-  -e 'set out to out & (name of n) & ": " & (count of attachments of n) & linefeed' -e 'end repeat' -e 'return out' -e 'end tell'
+  -e 'if not (exists folder (item 1 of argv)) then make new folder with properties {name:(item 1 of argv)}' -e 'end tell' -e 'end run' "$FOLDER"
+# create one note, return its id
+NID=$(osascript -e 'on run argv' -e 'tell application "Notes" to return id of (make new note at folder (item 1 of argv) with properties {body:("<h1>" & (item 2 of argv) & "</h1>")})' -e 'end run' "$FOLDER" "Videos 01")
+# attach file number K (1-based within this note) and remove the duplicate copy
+osascript -e 'on run argv' -e 'tell application "Notes"' -e 'set n to note id (item 1 of argv)' \
+  -e 'make new attachment at end of attachments of n with data (POSIX file (item 2 of argv))' \
+  -e 'set c to count of attachments of n' -e 'set e to (item 3 of argv) as integer' \
+  -e 'repeat while c > e' -e 'delete attachment c of n' -e 'set c to count of attachments of n' -e 'end repeat' \
+  -e 'return c' -e 'end tell' -e 'end run' "$NID" "$FILE" "$K"     # prints K when correct
+# verify per note: attachments must equal files added
+osascript -e 'on run argv' -e 'tell application "Notes"' -e 'set out to ""' -e 'repeat with n in notes of folder (item 1 of argv)' \
+  -e 'set out to out & (name of n) & ": " & (count of attachments of n) & linefeed' -e 'end repeat' -e 'return out' -e 'end tell' -e 'end run' "$FOLDER"
 ```
 
+- Open the folder in Notes and check visually that each note says "N videos"
+  and shows each video once.
+- Deleted notes go to Recently Deleted (kept 30 days, still counted in iCloud
+  storage until then).
 - Split large sets across numbered notes (about 20 videos each), oldest first,
   run the loop in the background with a log, and stop if free disk space drops
   below a safety floor (`df -g "$DIR" | tail -1 | awk '{print $4}'`).
